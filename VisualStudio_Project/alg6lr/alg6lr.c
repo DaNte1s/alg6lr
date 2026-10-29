@@ -1,4 +1,6 @@
+#ifndef _CRT_SECURE_NO_WARNINGS
 #define _CRT_SECURE_NO_WARNINGS
+#endif
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -16,6 +18,7 @@ struct Graph {
     int m;
     int** adj;
     struct Edge* edges;
+    int* labels;
 };
 
 struct Node {
@@ -33,31 +36,43 @@ struct Graph* create_graph(int n) {
     g->n = n;
     g->m = 0;
     g->edges = NULL;
-    g->adj = (int**)malloc(n * sizeof(int*));
-    for (int i = 0; i < n; i++) {
-        g->adj[i] = (int*)calloc(n, sizeof(int));
+    g->labels = NULL;
+    g->adj = NULL;
+    if (n > 0) {
+        g->labels = (int*)malloc(n * sizeof(int));
+        for (int i = 0; i < n; i++) {
+            g->labels[i] = i + 1;
+        }
+        g->adj = (int**)malloc(n * sizeof(int*));
+        for (int i = 0; i < n; i++) {
+            g->adj[i] = (int*)calloc(n, sizeof(int));
+        }
     }
     return g;
 }
 
 void free_graph(struct Graph* g) {
     if (!g) return;
-    for (int i = 0; i < g->n; i++) {
-        free(g->adj[i]);
+    if (g->adj) {
+        for (int i = 0; i < g->n; i++) {
+            free(g->adj[i]);
+        }
+        free(g->adj);
     }
-    free(g->adj);
     if (g->edges) free(g->edges);
+    if (g->labels) free(g->labels);
     free(g);
 }
 
 void build_edges(struct Graph* g) {
+    if (!g || g->n == 0 || !g->adj) return;
     if (g->edges) {
         free(g->edges);
         g->edges = NULL;
     }
     g->m = 0;
     for (int i = 0; i < g->n; i++) {
-        for (int j = i + 1; j < g->n; j++) {
+        for (int j = i; j < g->n; j++) {
             if (g->adj[i][j]) g->m++;
         }
     }
@@ -65,10 +80,10 @@ void build_edges(struct Graph* g) {
     g->edges = (struct Edge*)malloc(g->m * sizeof(struct Edge));
     int idx = 0;
     for (int i = 0; i < g->n; i++) {
-        for (int j = i + 1; j < g->n; j++) {
+        for (int j = i; j < g->n; j++) {
             if (g->adj[i][j]) {
-                g->edges[idx].u = i + 1;
-                g->edges[idx].v = j + 1;
+                g->edges[idx].u = g->labels[i];
+                g->edges[idx].v = g->labels[j];
                 idx++;
             }
         }
@@ -76,11 +91,15 @@ void build_edges(struct Graph* g) {
 }
 
 void print_adj(struct Graph* g) {
+    if (!g || g->n == 0) {
+        printf("Граф пуст.\n");
+        return;
+    }
     printf("Матрица смежности (%d x %d):\n      ", g->n, g->n);
-    for (int j = 0; j < g->n; j++) printf("v%-2d", j + 1);
+    for (int j = 0; j < g->n; j++) printf("v%-2d", g->labels[j]);
     printf("\n");
     for (int i = 0; i < g->n; i++) {
-        printf("v%-3d ", i + 1);
+        printf("v%-3d ", g->labels[i]);
         for (int j = 0; j < g->n; j++) {
             printf("%-3d", g->adj[i][j]);
         }
@@ -89,6 +108,10 @@ void print_adj(struct Graph* g) {
 }
 
 void print_edges(struct Graph* g) {
+    if (!g || g->n == 0) {
+        printf("Список рёбер: рёбер нет (граф пуст)\n");
+        return;
+    }
     build_edges(g);
     printf("Список рёбер (m = %d):\n", g->m);
     if (g->m == 0) {
@@ -96,7 +119,12 @@ void print_edges(struct Graph* g) {
         return;
     }
     for (int i = 0; i < g->m; i++) {
-        printf("  e%d: (v%d, v%d)\n", i + 1, g->edges[i].u, g->edges[i].v);
+        if (g->edges[i].u == g->edges[i].v) {
+            printf("  e%d: (v%d, v%d) (петля)\n", i + 1, g->edges[i].u, g->edges[i].v);
+        }
+        else {
+            printf("  e%d: (v%d, v%d)\n", i + 1, g->edges[i].u, g->edges[i].v);
+        }
     }
 }
 
@@ -135,7 +163,7 @@ void free_adj_list(struct AdjList* l) {
 }
 
 void add_list_node(struct AdjList* l, int u, int v) {
-    if (u < 1 || u > l->n || v < 1 || v > l->n || u == v) return;
+    if (u < 1 || u > l->n || v < 1 || v > l->n) return;
     struct Node* curr = l->head[u - 1];
     while (curr) {
         if (curr->val == v) return;
@@ -148,6 +176,7 @@ void add_list_node(struct AdjList* l, int u, int v) {
 }
 
 struct AdjList* matrix_to_list(struct Graph* g) {
+    if (!g || g->n == 0) return create_adj_list(0);
     struct AdjList* l = create_adj_list(g->n);
     for (int i = 0; i < g->n; i++) {
         for (int j = 0; j < g->n; j++) {
@@ -160,6 +189,10 @@ struct AdjList* matrix_to_list(struct Graph* g) {
 }
 
 void print_list(struct AdjList* l) {
+    if (!l || l->n == 0) {
+        printf("Списки смежности: список пуст\n");
+        return;
+    }
     printf("Списки смежности (вершин: %d):\n", l->n);
     for (int i = 0; i < l->n; i++) {
         printf("  v%d: ", i + 1);
@@ -168,7 +201,12 @@ void print_list(struct AdjList* l) {
             printf("нет смежных вершин");
         }
         while (curr) {
-            printf("-> v%d ", curr->val);
+            if (curr->val == i + 1) {
+                printf("-> v%d(петля) ", curr->val);
+            }
+            else {
+                printf("-> v%d ", curr->val);
+            }
             curr = curr->next;
         }
         printf("\n");
@@ -184,6 +222,7 @@ struct Graph* identify_vertices(struct Graph* g, int u, int v) {
 
     int u_idx = u - 1;
     int v_idx = v - 1;
+    int had_edge = g->adj[u_idx][v_idx];
 
     struct Graph* res = create_graph(g->n - 1);
     int* map = (int*)malloc(g->n * sizeof(int));
@@ -193,6 +232,7 @@ struct Graph* identify_vertices(struct Graph* g, int u, int v) {
             map[i] = map[u_idx];
         }
         else {
+            res->labels[cur] = g->labels[i];
             map[i] = cur++;
         }
     }
@@ -207,6 +247,17 @@ struct Graph* identify_vertices(struct Graph* g, int u, int v) {
                 }
             }
         }
+    }
+
+    for (int i = 0; i < g->n; i++) {
+        if (g->adj[i][i]) {
+            res->adj[map[i]][map[i]] = 1;
+        }
+    }
+
+    if (had_edge) {
+        int new_uv = map[u_idx];
+        res->adj[new_uv][new_uv] = 1;
     }
 
     build_edges(res);
@@ -224,7 +275,45 @@ struct Graph* contract_edge(struct Graph* g, int u, int v) {
         return NULL;
     }
     printf("Стягивание ребра (v%d, v%d)...\n", u, v);
-    return identify_vertices(g, u, v);
+    if (u > v) { int t = u; u = v; v = t; }
+
+    int u_idx = u - 1;
+    int v_idx = v - 1;
+
+    struct Graph* res = create_graph(g->n - 1);
+    int* map = (int*)malloc(g->n * sizeof(int));
+    int cur = 0;
+    for (int i = 0; i < g->n; i++) {
+        if (i == v_idx) {
+            map[i] = map[u_idx];
+        }
+        else {
+            res->labels[cur] = g->labels[i];
+            map[i] = cur++;
+        }
+    }
+
+    for (int i = 0; i < g->n; i++) {
+        for (int j = i + 1; j < g->n; j++) {
+            if (g->adj[i][j]) {
+                int ni = map[i];
+                int nj = map[j];
+                if (ni != nj) {
+                    res->adj[ni][nj] = res->adj[nj][ni] = 1;
+                }
+            }
+        }
+    }
+
+    for (int i = 0; i < g->n; i++) {
+        if (i != u_idx && i != v_idx && g->adj[i][i]) {
+            res->adj[map[i]][map[i]] = 1;
+        }
+    }
+
+    build_edges(res);
+    free(map);
+    return res;
 }
 
 struct Graph* split_vertex(struct Graph* g, int u) {
@@ -234,6 +323,12 @@ struct Graph* split_vertex(struct Graph* g, int u) {
     }
     int u_idx = u - 1;
     struct Graph* res = create_graph(g->n + 1);
+
+    for (int i = 0; i < g->n; i++) {
+        res->labels[i] = g->labels[i];
+    }
+    res->labels[g->n] = g->n + 1;
+
     for (int i = 0; i < g->n; i++) {
         for (int j = 0; j < g->n; j++) {
             res->adj[i][j] = g->adj[i][j];
@@ -241,21 +336,13 @@ struct Graph* split_vertex(struct Graph* g, int u) {
     }
 
     int new_v = g->n;
-    res->adj[u_idx][new_v] = res->adj[new_v][u_idx] = 1;
-
-    int neighbors[100];
-    int count = 0;
     for (int i = 0; i < g->n; i++) {
         if (g->adj[u_idx][i]) {
-            neighbors[count++] = i;
+            res->adj[new_v][i] = res->adj[i][new_v] = 1;
         }
     }
 
-    for (int i = count / 2; i < count; i++) {
-        int nb = neighbors[i];
-        res->adj[u_idx][nb] = res->adj[nb][u_idx] = 0;
-        res->adj[new_v][nb] = res->adj[nb][new_v] = 1;
-    }
+    res->adj[u_idx][new_v] = res->adj[new_v][u_idx] = 1;
 
     build_edges(res);
     return res;
@@ -264,6 +351,13 @@ struct Graph* split_vertex(struct Graph* g, int u) {
 struct AdjList* list_identify_vertices(struct AdjList* l, int u, int v) {
     if (u < 1 || u > l->n || v < 1 || v > l->n || u == v) return NULL;
     if (u > v) { int t = u; u = v; v = t; }
+
+    int had_edge = 0;
+    struct Node* curr = l->head[u - 1];
+    while (curr) {
+        if (curr->val == v) { had_edge = 1; break; }
+        curr = curr->next;
+    }
 
     int* map = (int*)malloc((l->n + 1) * sizeof(int));
     int cur = 1;
@@ -279,7 +373,7 @@ struct AdjList* list_identify_vertices(struct AdjList* l, int u, int v) {
     struct AdjList* res = create_adj_list(l->n - 1);
     for (int i = 1; i <= l->n; i++) {
         int ni = map[i];
-        struct Node* curr = l->head[i - 1];
+        curr = l->head[i - 1];
         while (curr) {
             int nj = map[curr->val];
             if (ni != nj) {
@@ -288,6 +382,12 @@ struct AdjList* list_identify_vertices(struct AdjList* l, int u, int v) {
             curr = curr->next;
         }
     }
+
+    if (had_edge) {
+        int new_uv = map[u];
+        add_list_node(res, new_uv, new_uv);
+    }
+
     free(map);
     return res;
 }
@@ -304,7 +404,34 @@ struct AdjList* list_contract_edge(struct AdjList* l, int u, int v) {
         printf("Ребра (v%d, v%d) нет в списке!\n", u, v);
         return NULL;
     }
-    return list_identify_vertices(l, u, v);
+    if (u > v) { int t = u; u = v; v = t; }
+
+    int* map = (int*)malloc((l->n + 1) * sizeof(int));
+    int cur = 1;
+    for (int i = 1; i <= l->n; i++) {
+        if (i == v) {
+            map[i] = map[u];
+        }
+        else {
+            map[i] = cur++;
+        }
+    }
+
+    struct AdjList* res = create_adj_list(l->n - 1);
+    for (int i = 1; i <= l->n; i++) {
+        int ni = map[i];
+        curr = l->head[i - 1];
+        while (curr) {
+            int nj = map[curr->val];
+            if (ni != nj) {
+                add_list_node(res, ni, nj);
+            }
+            curr = curr->next;
+        }
+    }
+
+    free(map);
+    return res;
 }
 
 struct AdjList* list_split_vertex(struct AdjList* l, int u) {
@@ -312,39 +439,27 @@ struct AdjList* list_split_vertex(struct AdjList* l, int u) {
     struct AdjList* res = create_adj_list(l->n + 1);
     int new_v = l->n + 1;
 
-    add_list_node(res, u, new_v);
-    add_list_node(res, new_v, u);
-
-    int neighbors[100];
-    int count = 0;
-    struct Node* curr = l->head[u - 1];
-    while (curr) {
-        neighbors[count++] = curr->val;
-        curr = curr->next;
-    }
-
     for (int i = 1; i <= l->n; i++) {
-        if (i == u) continue;
         struct Node* node = l->head[i - 1];
         while (node) {
-            if (node->val != u && node->val > i) {
-                add_list_node(res, i, node->val);
-                add_list_node(res, node->val, i);
-            }
+            add_list_node(res, i, node->val);
             node = node->next;
         }
     }
-    for (int i = 0; i < count; i++) {
-        int nb = neighbors[i];
-        if (i < count / 2) {
-            add_list_node(res, u, nb);
-            add_list_node(res, nb, u);
-        }
-        else {
+
+    struct Node* curr = l->head[u - 1];
+    while (curr) {
+        int nb = curr->val;
+        if (nb != u) {
             add_list_node(res, new_v, nb);
             add_list_node(res, nb, new_v);
         }
+        curr = curr->next;
     }
+
+    add_list_node(res, u, new_v);
+    add_list_node(res, new_v, u);
+
     return res;
 }
 
@@ -363,13 +478,11 @@ struct Graph* union_graphs(struct Graph* g1, struct Graph* g2) {
 }
 
 struct Graph* intersect_graphs(struct Graph* g1, struct Graph* g2) {
-    int n = (g1->n > g2->n) ? g1->n : g2->n;
+    int n = (g1->n < g2->n) ? g1->n : g2->n;
     struct Graph* res = create_graph(n);
     for (int i = 0; i < n; i++) {
         for (int j = 0; j < n; j++) {
-            int a = (i < g1->n && j < g1->n) ? g1->adj[i][j] : 0;
-            int b = (i < g2->n && j < g2->n) ? g2->adj[i][j] : 0;
-            res->adj[i][j] = (a && b) ? 1 : 0;
+            res->adj[i][j] = (g1->adj[i][j] && g2->adj[i][j]) ? 1 : 0;
         }
     }
     build_edges(res);
@@ -405,7 +518,7 @@ struct Graph* ring_sum_graphs(struct Graph* g1, struct Graph* g2) {
     }
 
     if (count == 0) {
-        printf("Кольцевая сумма не содержит рёбер.\n");
+        printf("Кольцевая сумма не содержит рёбер (все вершины изолированы).\n");
         for (int i = 0; i < max_n; i++) free(temp[i]);
         free(temp);
         free(deg);
@@ -419,6 +532,9 @@ struct Graph* ring_sum_graphs(struct Graph* g1, struct Graph* g2) {
     printf("\n");
 
     struct Graph* res = create_graph(count);
+    for (int i = 0; i < count; i++) {
+        res->labels[i] = map[i] + 1;
+    }
     for (int i = 0; i < count; i++) {
         for (int j = 0; j < count; j++) {
             res->adj[i][j] = temp[map[i]][map[j]];
@@ -463,7 +579,7 @@ void cartesian_product(struct Graph* g1, struct Graph* g2) {
     printf("\nМатрица смежности G1 x G2 (%d x %d):\n        ", total, total);
     for (int i = 0; i < n1; i++) {
         for (int k = 0; k < n2; k++) {
-            printf("(%d,%d) ", i + 1, k + 1);
+            printf("(%d,%d) ", g1->labels[i], g2->labels[k]);
         }
     }
     printf("\n");
@@ -471,7 +587,7 @@ void cartesian_product(struct Graph* g1, struct Graph* g2) {
     for (int i = 0; i < n1; i++) {
         for (int k = 0; k < n2; k++) {
             int r = i * n2 + k;
-            printf("(%d,%d)   ", i + 1, k + 1);
+            printf("(%d,%d)   ", g1->labels[i], g2->labels[k]);
             for (int j = 0; j < n1; j++) {
                 for (int l = 0; l < n2; l++) {
                     int c = j * n2 + l;
@@ -487,8 +603,8 @@ void cartesian_product(struct Graph* g1, struct Graph* g2) {
     for (int r = 0; r < total; r++) {
         for (int c = r + 1; c < total; c++) {
             if (prod[r][c]) {
-                int u1 = r / n2 + 1, v1 = r % n2 + 1;
-                int u2 = c / n2 + 1, v2 = c % n2 + 1;
+                int u1 = g1->labels[r / n2], v1 = g2->labels[r % n2];
+                int u2 = g1->labels[c / n2], v2 = g2->labels[c % n2];
                 printf("  e%d: (v%d, w%d) - (v%d, w%d)\n", e++, u1, v1, u2, v2);
             }
         }
@@ -507,7 +623,7 @@ int main() {
     setlocale(LC_ALL, "Russian");
     srand((unsigned int)time(NULL));
 
-    struct Graph* g1 = random_graph(4, 50);
+    struct Graph* g1 = random_graph(3, 60);
     struct Graph* g2 = random_graph(4, 50);
     struct AdjList* l1 = matrix_to_list(g1);
     struct AdjList* l2 = matrix_to_list(g2);
@@ -527,14 +643,14 @@ int main() {
         if (scanf("%d", &choice) != 1 || choice == 0) break;
 
         if (choice == 1) {
-            int n1 = 4, p1 = 50, n2 = 4, p2 = 50;
+            int n1 = 3, p1 = 60, n2 = 4, p2 = 50;
             printf("Вершин в G1: ");
-            if (scanf("%d", &n1) != 1 || n1 < 2) n1 = 4;
+            if (scanf("%d", &n1) != 1 || n1 < 1) n1 = 3;
             printf("Вероятность рёбер G1 (%%): ");
-            if (scanf("%d", &p1) != 1) p1 = 50;
+            if (scanf("%d", &p1) != 1) p1 = 60;
 
             printf("Вершин в G2: ");
-            if (scanf("%d", &n2) != 1 || n2 < 2) n2 = 4;
+            if (scanf("%d", &n2) != 1 || n2 < 1) n2 = 4;
             printf("Вероятность рёбер G2 (%%): ");
             if (scanf("%d", &p2) != 1) p2 = 50;
 
@@ -630,7 +746,7 @@ int main() {
 
             printf("\n--- Кольцевая сумма G1 (+) G2 ---\n");
             struct Graph* gr = ring_sum_graphs(g1, g2);
-            if (gr->n > 0) {
+            if (gr && gr->n > 0) {
                 print_adj(gr);
                 print_edges(gr);
             }
